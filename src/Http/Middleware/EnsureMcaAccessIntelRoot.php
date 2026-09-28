@@ -4,6 +4,7 @@ namespace Mca\AccessIntel\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Mca\Permission\Services\PackageAccessService;
 use Mca\Permission\Services\PermissionService;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -17,12 +18,26 @@ class EnsureMcaAccessIntelRoot
             abort(403);
         }
 
+        $forbidden = 'Bu MCA paketi için yetkiniz yok.';
+
+        if (class_exists(PackageAccessService::class)
+            && is_array(config('permission.packages.access-intel'))) {
+            $packages = app(PackageAccessService::class);
+            $ability = $packages->abilityForRequest($request);
+
+            if ($packages->allows($user, 'access-intel', $ability)) {
+                return $next($request);
+            }
+
+            abort(403, $forbidden);
+        }
+
         if (config('access-intel.access.use_permission_root', true) && class_exists(PermissionService::class)) {
             if (app(PermissionService::class)->isRoot($user)) {
                 return $next($request);
             }
 
-            abort(403, mca_intel('errors.root_only'));
+            abort(403, $forbidden);
         }
 
         $column = (string) config('access-intel.access.role_column', 'role_id');
@@ -37,6 +52,6 @@ class EnsureMcaAccessIntelRoot
             return $next($request);
         }
 
-        abort(403, mca_intel('errors.root_only'));
+        abort(403, $forbidden);
     }
 }
